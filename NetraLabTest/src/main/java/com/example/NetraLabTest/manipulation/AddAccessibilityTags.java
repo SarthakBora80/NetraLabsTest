@@ -1,90 +1,72 @@
+ package com.example.NetraLabTest.manipulation;
 
-import com.itextpdf.kernel.pdf.tagutils.*;
-import com.itextpdf.kernel.pdf.PdfCatalog;
-import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfDocumentInfo;
-import com.itextpdf.kernel.pdf.PdfName;
-import com.itextpdf.kernel.pdf.PdfPage;
-import com.itextpdf.kernel.pdf.PdfReader;
-import com.itextpdf.kernel.pdf.PdfString;
-import com.itextpdf.kernel.pdf.PdfWriter;
-import com.itextpdf.kernel.pdf.canvas.parser.listener.*;
-import com.itextpdf.kernel.pdf.tagging.PdfStructTreeRoot;
+import com.itextpdf.kernel.pdf.*;
+import com.itextpdf.kernel.pdf.tagging.*;
 import com.itextpdf.layout.*;
 import com.itextpdf.layout.element.*;
 import com.google.gson.*;
 import java.io.*;
-import java.util.*;
-import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
 
-import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.kernel.pdf.*;
+import com.itextpdf.kernel.pdf.tagging.*;
+import com.itextpdf.layout.*;
+import com.itextpdf.layout.element.*;
+import com.google.gson.*;
+import java.io.*;
 
-/*
- *  I have created Addaccessibility Tag class and there i have added three file which i got through email
- *  i have dowloaded that and given local folder path
- * 
- *   author sarthak bora
- * */
+import com.itextpdf.kernel.pdf.*;
+import com.itextpdf.kernel.pdf.tagging.*;
+import com.itextpdf.layout.*;
+import com.itextpdf.layout.element.*;
+import com.google.gson.*;
+import java.io.*;
 
 public class AddAccessibilityTags {
 
     public static void main(String[] args) throws IOException {
-    	
-        /* Below one is Input PDF file path, we can add file directly but i hvae save file and given file path */
-    	
-        String inputPdf = "C:\\File\\exercise2.pdf";
-        
-        /* Sample file -> output PDF file path*/
-        
-        String outputPdf = "sample_tagged.pdf";
-        
-        
-        /* Below one is path of existing json mapping file*/ 
-        
-        String jsonMappingFile = "C:\\File\\Exercise_JSON.json";
+        // Corrected file paths
+        String inputPdf = "C:/File/exercise2.pdf";
+        String outputPdf = "output_tagged.pdf";
+        String jsonMappingFile = "C:/File/Exercise_JSON.json";
 
-        /* I have add Method Below which will take Inout as a file and convert to java object, i am doing via gson library ,
-         *  for this another apprach is objectmapper class of Jackson */
-        
-        
+        // Load JSON mapping data
         JsonObject jsonMapping = loadJsonMapping(jsonMappingFile);
 
-        /* Opening the existing input file*/
-        
+        // Open PDF
         PdfReader reader = new PdfReader(inputPdf);
-        
-        /* adding writer class*/
-        
         PdfWriter writer = new PdfWriter(outputPdf);
         PdfDocument pdfDoc = new PdfDocument(reader, writer);
 
-        /* Enabling a Tagging and taking element from converted java object*/
-        
+        // Enable tagging & metadata
         pdfDoc.setTagged();
         PdfCatalog catalog = pdfDoc.getCatalog();
         catalog.setLang(new PdfString(jsonMapping.get("Document").getAsJsonObject().get("Language").getAsString()));
         PdfDocumentInfo info = pdfDoc.getDocumentInfo();
         info.setTitle(jsonMapping.get("Document").getAsJsonObject().get("Title").getAsString());
 
-        /* Create the root structure element */
-        PdfStructTreeRoot structTreeRoot = catalog.getStructTreeRoot();
-        PdfStructureElement rootElement = new PdfStructureElement(structTreeRoot, PdfName.Document);
+        // Get the struct tree root
+        PdfStructTreeRoot structTreeRoot = pdfDoc.getStructTreeRoot();
 
-        /* Process each page and add tags */
+        // Create a root element, linking it to the structTreeRoot
+        PdfStructElem rootElement = new PdfStructElem(pdfDoc, PdfName.Div); // Using PdfDocument here
+
+        // Process each page
         JsonArray pages = jsonMapping.get("Document").getAsJsonObject().getAsJsonArray("Pages");
         for (int i = 0; i < pages.size(); i++) {
             JsonObject pageObject = pages.get(i).getAsJsonObject();
             PdfPage page = pdfDoc.getPage(i + 1);
-            PdfStructureElement sectElement = new PdfStructureElement(rootElement, PdfName.Sect);
+
+            // Correctly create a section under the root element
+            PdfStructElem sectElement = new PdfStructElem(pdfDoc, PdfName.Sect); // Using PdfDocument here
 
             JsonArray tagObjects = pageObject.getAsJsonArray("TagObjects");
             for (JsonElement contentElement : tagObjects) {
                 JsonObject contentObject = contentElement.getAsJsonObject();
-                addContentTag(page, sectElement, contentObject, pageObject);
+                addContentTag(pdfDoc, page, sectElement, contentObject, pageObject); // Pass PdfDocument here
             }
         }
 
-        /* Closing PDF document*/
+        // Close document
         pdfDoc.close();
         System.out.println("Accessibility tags added successfully to " + outputPdf);
     }
@@ -96,7 +78,7 @@ public class AddAccessibilityTags {
         }
     }
 
-    private static void addContentTag(PdfPage page, PdfStructureElement parentElement, JsonObject contentObject, JsonObject pageObject) {
+    private static void addContentTag(PdfDocument pdfDoc, PdfPage page, PdfStructElem parentElement, JsonObject contentObject, JsonObject pageObject) {
         String tagType = contentObject.get("tag").getAsString();
         JsonObject bbox = contentObject.has("bBox") ? contentObject.getAsJsonObject("bBox") : new JsonObject();
         float x = bbox.get("Left").getAsFloat() * pageObject.get("PageWidth").getAsFloat();
@@ -104,7 +86,11 @@ public class AddAccessibilityTags {
         float width = bbox.get("Width").getAsFloat() * pageObject.get("PageWidth").getAsFloat();
         float height = bbox.get("Height").getAsFloat() * pageObject.get("PageHeight").getAsFloat();
 
-        PdfStructureElement contentElement = new PdfStructureElement(parentElement, new PdfName(tagType));
+        // Correct constructor usage: Passing PdfDocument as the first argument
+        PdfStructElem contentElement = new PdfStructElem(pdfDoc, new PdfName(tagType)); // ✅ Using PdfDocument here
+
+        // Add the new content element as a child of the parent
+        parentElement.addKid(contentElement);
 
         switch (tagType) {
             case "P":
@@ -128,7 +114,15 @@ public class AddAccessibilityTags {
                 break;
 
             case "Table":
+                // Handle tables here
+                break;
 
+            case "Figure":
+                // Handle images here
+                break;
+
+            case "LI":
+                // Handle lists here
                 break;
 
             default:
@@ -137,3 +131,5 @@ public class AddAccessibilityTags {
         }
     }
 }
+
+
