@@ -34,32 +34,43 @@ public class AddAccessibilityTags {
     	
         String inputPdf = "C:\\File\\exercise2.pdf";
         
-        /* Sample file -> Output PDF file path*/
+        /* Sample file -> output PDF file path*/
         
         String outputPdf = "sample_tagged.pdf";
-        // JSON mapping file path
+        
+        
+        /* Below one is path of existing json mapping file*/ 
+        
         String jsonMappingFile = "C:\\File\\Exercise_JSON.json";
 
-        // Load the JSON mapping data
+        /* I have add Method Below which will take Inout as a file and convert to java object, i am doing via gson library ,
+         *  for this another apprach is objectmapper class of Jackson */
+        
+        
         JsonObject jsonMapping = loadJsonMapping(jsonMappingFile);
 
-        // Open the existing PDF
+        /* Opening the existing input file*/
+        
         PdfReader reader = new PdfReader(inputPdf);
+        
+        /* adding writer class*/
+        
         PdfWriter writer = new PdfWriter(outputPdf);
         PdfDocument pdfDoc = new PdfDocument(reader, writer);
 
-        // Enable tagging and set PDF/UA compliance metadata
+        /* Enabling a Tagging and taking element from converted java object*/
+        
         pdfDoc.setTagged();
         PdfCatalog catalog = pdfDoc.getCatalog();
         catalog.setLang(new PdfString(jsonMapping.get("Document").getAsJsonObject().get("Language").getAsString()));
         PdfDocumentInfo info = pdfDoc.getDocumentInfo();
         info.setTitle(jsonMapping.get("Document").getAsJsonObject().get("Title").getAsString());
 
-        // Create the root structure element
+        /* Create the root structure element */
         PdfStructTreeRoot structTreeRoot = catalog.getStructTreeRoot();
         PdfStructureElement rootElement = new PdfStructureElement(structTreeRoot, PdfName.Document);
 
-        // Process each page and add tags
+        /* Process each page and add tags */
         JsonArray pages = jsonMapping.get("Document").getAsJsonObject().getAsJsonArray("Pages");
         for (int i = 0; i < pages.size(); i++) {
             JsonObject pageObject = pages.get(i).getAsJsonObject();
@@ -73,7 +84,7 @@ public class AddAccessibilityTags {
             }
         }
 
-        // Close the PDF document
+        /* Closing PDF document*/
         pdfDoc.close();
         System.out.println("Accessibility tags added successfully to " + outputPdf);
     }
