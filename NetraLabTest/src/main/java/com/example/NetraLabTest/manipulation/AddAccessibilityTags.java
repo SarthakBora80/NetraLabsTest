@@ -29,10 +29,14 @@ import com.itextpdf.layout.element.Paragraph;
 public class AddAccessibilityTags {
 
     public static void main(String[] args) throws IOException {
-        // Input PDF file path
+    	
+        /* Below one is Input PDF file path, we can add file directly but i hvae save file and given file path */
+    	
         String inputPdf = "C:\\File\\exercise2.pdf";
-        // Output PDF file path
-        String outputPdf = "output_tagged.pdf";
+        
+        /* Sample file -> Output PDF file path*/
+        
+        String outputPdf = "sample_tagged.pdf";
         // JSON mapping file path
         String jsonMappingFile = "C:\\File\\Exercise_JSON.json";
 
