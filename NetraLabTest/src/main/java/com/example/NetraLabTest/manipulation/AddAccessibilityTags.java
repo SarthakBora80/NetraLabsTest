@@ -7,85 +7,108 @@ import com.itextpdf.layout.element.*;
 import com.google.gson.*;
 import java.io.*;
 
-import com.itextpdf.kernel.pdf.*;
-import com.itextpdf.kernel.pdf.tagging.*;
-import com.itextpdf.layout.*;
-import com.itextpdf.layout.element.*;
-import com.google.gson.*;
-import java.io.*;
-
-import com.itextpdf.kernel.pdf.*;
-import com.itextpdf.kernel.pdf.tagging.*;
-import com.itextpdf.layout.*;
-import com.itextpdf.layout.element.*;
-import com.google.gson.*;
-import java.io.*;
-
-/* I have added class below, approch is first convert json data into java object, then we can use data,
- * then we can tagged a pdf documennt and will do a proper tag hirerchy, JSON bounding box coordinates are converted to PDF points.
-Invisible overlay text is added at the exact positions for accurate tagging without altering the visual appearance, the design style also given, i can use that
-author sarthak bora
- */
-
+/*
+ * Adding AccessibilityTags to a PDF document based on JSON DATA
+ * 
+ * autor sarthak bora
+ * ***/
 public class AddAccessibilityTags {
 
-	public static void main(String[] args) throws IOException {
-		/* I have added file paths, because adding file take long time */
-		String inputPdf = "C:/File/exercise2.pdf";
-		String outputPdf = "output_tagged.pdf";
+	public static void main(String[] args) {
+		/* I have added file path here and created output_sample.pdf file */
+		String inputPdf = "C:/File/Exercise.pdf";
+		String outputPdf = "output_sample.pdf";
 		String jsonMappingFile = "C:/File/Exercise_JSON.json";
 
-		/*
-		 * converting Json data into Java Object, i am using gson,can do this with
-		 * objectmapper also
-		 */
-		JsonObject jsonMapping = loadJsonMapping(jsonMappingFile);
+		try {
+			/*
+			 * First I am loading Json data that mean converting Json Data into java object
+			 */
+			JsonElement jsonMappingElement = loadJsonMapping(jsonMappingFile);
+			JsonObject jsonMapping;
 
-		/* opening pdf and added pdf writer also */
+			/*
+			 * In our json file json data is presnet in array format that's why i have added
+			 * below check
+			 */
 
-		PdfReader reader = new PdfReader(inputPdf);
-		PdfWriter writer = new PdfWriter(outputPdf);
-		PdfDocument pdfDoc = new PdfDocument(reader, writer);
+			if (jsonMappingElement.isJsonObject()) {
+				jsonMapping = jsonMappingElement.getAsJsonObject();
+			} else if (jsonMappingElement.isJsonArray()) {
+				JsonArray jsonArray = jsonMappingElement.getAsJsonArray();
+				if (jsonArray.size() > 0 && jsonArray.get(0).isJsonObject()) {
+					jsonMapping = jsonArray.get(0).getAsJsonObject(); // Extract first object
+				} else {
+					throw new JsonSyntaxException("Error: JSON root is an empty array or does not contain an object.");
+				}
+			} else {
+				throw new JsonSyntaxException("Unexpected JSON format. Expected Object or Array.");
+			}
 
-		/* Enable tagging & metadata */
-		pdfDoc.setTagged();
-		PdfCatalog catalog = pdfDoc.getCatalog();
-		catalog.setLang(new PdfString(jsonMapping.get("Document").getAsJsonObject().get("Language").getAsString()));
-		PdfDocumentInfo info = pdfDoc.getDocumentInfo();
-		info.setTitle(jsonMapping.get("Document").getAsJsonObject().get("Title").getAsString());
+			/*
+			 * After extracting json data from array , i am checking whether first node is
+			 * document or not
+			 */
+			if (!jsonMapping.has("Document") || !jsonMapping.get("Document").isJsonObject()) {
+				throw new JsonSyntaxException("Error: JSON does not contain a 'Document' object.");
+			}
 
-		/* Get the struct tree root */
-		PdfStructTreeRoot structTreeRoot = pdfDoc.getStructTreeRoot();
+			JsonObject documentObject = jsonMapping.getAsJsonObject("Document");
 
-		/* Create a root element one by one, linking it to the structTreeRoot */
-		PdfStructElem rootElement = new PdfStructElem(pdfDoc, PdfName.Div); // Using PdfDocument here
+			/* opening pdf and writing in pdf */
+			PdfReader reader = new PdfReader(inputPdf);
+			PdfWriter writer = new PdfWriter(outputPdf);
+			PdfDocument pdfDoc = new PdfDocument(reader, writer);
 
-		/* proceess the page here there is only one page */
-		JsonArray pages = jsonMapping.get("Document").getAsJsonObject().getAsJsonArray("Pages");
-		for (int i = 0; i < pages.size(); i++) {
-			JsonObject pageObject = pages.get(i).getAsJsonObject();
-			PdfPage page = pdfDoc.getPage(i + 1);
+			/* Enable tagging and metadata */
+			pdfDoc.setTagged();
+			PdfCatalog catalog = pdfDoc.getCatalog();
+			catalog.setLang(new PdfString(documentObject.get("Language").getAsString()));
 
-			/* Correctly create a section under the root element ,using PdfDocument here */
+			PdfDocumentInfo info = pdfDoc.getDocumentInfo();
+			info.setTitle(documentObject.get("Title").getAsString());
+
+			/* Correct Structure Root */
+			PdfStructTreeRoot structTreeRoot = pdfDoc.getStructTreeRoot();
+			PdfStructElem rootElement = new PdfStructElem(pdfDoc, PdfName.Document);
+			structTreeRoot.addKid(rootElement); // Add root element to structure tree
+
+			JsonArray pages = documentObject.getAsJsonArray("Pages");
+
+			/*
+			 * Check if the PDF has enough pages int pdfPageCount =
+			 * pdfDoc.getNumberOfPages(); if (pages.size() > pdfPageCount) { throw new
+			 * IndexOutOfBoundsException("JSON contains data for " + pages.size() +
+			 * " pages, but the PDF has only " + pdfPageCount + " pages."); }
+			 */
+
+			JsonObject pageObject = pages.get(1).getAsJsonObject();
+			PdfPage page = pdfDoc.getPage(1); // Pages are 1-indexed
+
+			/* Use rootElement as the parent for section elements */
 			PdfStructElem sectElement = new PdfStructElem(pdfDoc, PdfName.Sect);
+			rootElement.addKid(sectElement); // Add sectElement to rootElement
 
 			JsonArray tagObjects = pageObject.getAsJsonArray("TagObjects");
 			for (JsonElement contentElement : tagObjects) {
 				JsonObject contentObject = contentElement.getAsJsonObject();
-				/* passing document here */
 				addContentTag(pdfDoc, page, sectElement, contentObject, pageObject);
 			}
-		}
 
-		/* Close document */
-		pdfDoc.close();
-		System.out.println("Accessibility tags added successfully to " + outputPdf);
+			/* Close document */
+			pdfDoc.close();
+			System.out.println("Accessibility tags added successfully to " + outputPdf);
+
+		} catch (IOException | JsonSyntaxException e) {
+			System.err.println("Error: " + e.getMessage());
+			e.printStackTrace();
+		}
 	}
 
-	private static JsonObject loadJsonMapping(String jsonMappingFile) throws IOException {
+	private static JsonElement loadJsonMapping(String jsonMappingFile) throws IOException {
 		Gson gson = new Gson();
 		try (Reader reader = new FileReader(jsonMappingFile)) {
-			return gson.fromJson(reader, JsonObject.class);
+			return gson.fromJson(reader, JsonElement.class);
 		}
 	}
 
@@ -93,16 +116,15 @@ public class AddAccessibilityTags {
 			JsonObject contentObject, JsonObject pageObject) {
 		String tagType = contentObject.get("tag").getAsString();
 		JsonObject bbox = contentObject.has("bBox") ? contentObject.getAsJsonObject("bBox") : new JsonObject();
-		float x = bbox.get("Left").getAsFloat() * pageObject.get("PageWidth").getAsFloat();
-		float y = (1 - bbox.get("Top").getAsFloat()) * pageObject.get("PageHeight").getAsFloat();
-		float width = bbox.get("Width").getAsFloat() * pageObject.get("PageWidth").getAsFloat();
-		float height = bbox.get("Height").getAsFloat() * pageObject.get("PageHeight").getAsFloat();
 
-		/* Passing PdfDocument as the first argument */
-		PdfStructElem contentElement = new PdfStructElem(pdfDoc, new PdfName(tagType)); // ✅ Using PdfDocument here
+		float x = getJsonFloat(bbox, "Left", 0) * getJsonFloat(pageObject, "PageWidth", 1);
+		float y = (1 - getJsonFloat(bbox, "Top", 0)) * getJsonFloat(pageObject, "PageHeight", 1);
+		float width = getJsonFloat(bbox, "Width", 0) * getJsonFloat(pageObject, "PageWidth", 1);
+		float height = getJsonFloat(bbox, "Height", 0) * getJsonFloat(pageObject, "PageHeight", 1);
 
-		/* Add the new content element as a child of the parent */
-		parentElement.addKid(contentElement);
+		/* Create content element */
+		PdfStructElem contentElement = new PdfStructElem(pdfDoc, new PdfName(tagType));
+		parentElement.addKid(contentElement); // Add contentElement to parentElement
 
 		switch (tagType) {
 		case "P":
@@ -119,7 +141,7 @@ public class AddAccessibilityTags {
 					String text = lineObject.get("text").getAsString();
 					Paragraph paragraph = new Paragraph(text);
 					paragraph.setFixedPosition(x, y - height, width);
-					paragraph.setOpacity(0.0f); // Invisible overlay
+					paragraph.setOpacity(1.0f); // Make text visible
 					new Canvas(page, page.getPageSize()).add(paragraph);
 				}
 			}
@@ -133,5 +155,9 @@ public class AddAccessibilityTags {
 			System.out.println("Unsupported tag type: " + tagType);
 			break;
 		}
+	}
+
+	private static float getJsonFloat(JsonObject obj, String key, float defaultValue) {
+		return (obj.has(key) && !obj.get(key).isJsonNull()) ? obj.get(key).getAsFloat() : defaultValue;
 	}
 }
